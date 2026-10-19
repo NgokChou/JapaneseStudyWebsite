@@ -1,29 +1,43 @@
 "use client";
 
 import * as React from "react";
-import { Header } from "@/components/layout/header";
-import { StatsOverview } from "@/features/documents/components/stats-overview";
-import { EmptyState } from "@/features/documents/components/empty-state";
-import { DocumentCard } from "@/features/documents/components/document-card";
-import { CreateDocumentModal } from "@/features/documents/components/create-document-modal";
-import { DeleteConfirmModal } from "@/features/documents/components/delete-confirm-modal";
-import { DocumentMeta, JLPTLevel, DocumentCategory } from "@/types/document";
-import { Search, Filter, Plus, ArrowUpDown, CheckCircle, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Folder, Document, ViewMode, MoveTarget, BreadcrumbItem } from "@/types/explorer";
+import { DocumentTemplate } from "@/types/template";
+import { INITIAL_FOLDERS, INITIAL_DOCUMENTS, cloneBlocks } from "@/lib/initial-data";
+import { BUILTIN_TEMPLATES } from "@/features/templates/builtin-templates";
+import { FolderTree } from "@/features/explorer/components/folder-tree";
+import { BreadcrumbNav } from "@/features/explorer/components/breadcrumb-nav";
+import { ExplorerToolbar } from "@/features/explorer/components/explorer-toolbar";
+import { FolderView } from "@/features/explorer/components/folder-view";
+import { CreateFolderModal } from "@/features/explorer/components/create-folder-modal";
+import { MoveDialog } from "@/features/explorer/components/move-dialog";
+import { DeleteDialog } from "@/features/explorer/components/delete-dialog";
+import { TemplateModal } from "@/features/templates/template-modal";
+import { EditorPage } from "@/features/editor/editor-page";
+import { BookOpen, CheckCircle, Info, Menu, X } from "lucide-react";
 
-export default function DocumentLibraryPage() {
-  // Danh sách tài liệu (lưu tạm trong state ở Giai đoạn 1; Giai đoạn 2 sẽ liên kết IndexedDB Dexie)
-  const [documents, setDocuments] = React.useState<DocumentMeta[]>([]);
+export default function HomePage() {
+  // --- STATE DỮ LIỆU ---
+  const [folders, setFolders] = React.useState<Folder[]>(INITIAL_FOLDERS);
+  const [documents, setDocuments] = React.useState<Document[]>(INITIAL_DOCUMENTS);
+  const [templates, setTemplates] = React.useState<DocumentTemplate[]>(BUILTIN_TEMPLATES);
+
+  // --- NAVIGATION STATE ---
+  const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(null);
+  const [activeDocumentId, setActiveDocumentId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedCategory, setSelectedCategory] = React.useState<DocumentCategory | "all">("all");
-  const [selectedLevel, setSelectedLevel] = React.useState<JLPTLevel | "all">("all");
-  const [sortBy, setSortBy] = React.useState<"updatedAt" | "createdAt" | "title">("updatedAt");
+  const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
 
-  // Modal states
-  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
-  const [deletingDocument, setDeletingDocument] = React.useState<DocumentMeta | null>(null);
+  // --- MODAL STATES ---
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = React.useState(false);
+  const [renamingFolder, setRenamingFolder] = React.useState<Folder | null>(null);
+  const [createFolderParentId, setCreateFolderParentId] = React.useState<string | null>(null);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
+  const [moveTarget, setMoveTarget] = React.useState<MoveTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<{ type: "folder" | "document"; id: string; name: string } | null>(null);
 
-  // Notification state
+  // --- TOAST NOTIFICATION ---
   const [toastMessage, setToastMessage] = React.useState<{ text: string; type: "success" | "info" } | null>(null);
 
   const showToast = (text: string, type: "success" | "info" = "success") => {
@@ -33,271 +47,384 @@ export default function DocumentLibraryPage() {
     }, 3500);
   };
 
-  // Thêm tài liệu mới
-  const handleCreateDocument = (data: Omit<DocumentMeta, "id" | "createdAt" | "updatedAt" | "itemCount">) => {
-    const newDoc: DocumentMeta = {
-      id: "doc_" + Date.now().toString(),
-      ...data,
-      itemCount: 0,
+  // Thư mục hiện tại
+  const currentFolder = React.useMemo(() => {
+    return currentFolderId ? folders.find((f) => f.id === currentFolderId) || null : null;
+  }, [currentFolderId, folders]);
+
+  // Tạo Breadcrumb từ Thư mục gốc -> con
+  const breadcrumbs = React.useMemo<BreadcrumbItem[]>(() => {
+    if (!currentFolderId) return [];
+    const items: BreadcrumbItem[] = [];
+    let curr = folders.find((f) => f.id === currentFolderId);
+    while (curr) {
+      items.unshift({ id: curr.id, name: curr.name });
+      const parentId: string | null = curr.parentId;
+      curr = parentId ? folders.find((f) => f.id === parentId) : undefined;
+    }
+    return items;
+  }, [currentFolderId, folders]);
+
+  // Lọc thư mục con và tài liệu trong thư mục đang chọn (có hỗ trợ tìm kiếm)
+  const currentSubFolders = React.useMemo(() => {
+    if (searchQuery.trim()) {
+      return folders.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return folders.filter((f) => f.parentId === currentFolderId);
+  }, [folders, currentFolderId, searchQuery]);
+
+  const currentDocuments = React.useMemo(() => {
+    if (searchQuery.trim()) {
+      return documents.filter((d) =>
+        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    return documents.filter((d) => d.folderId === currentFolderId);
+  }, [documents, currentFolderId, searchQuery]);
+
+  // Tài liệu đang được mở biên tập
+  const activeDocument = React.useMemo(() => {
+    return documents.find((d) => d.id === activeDocumentId) || null;
+  }, [activeDocumentId, documents]);
+
+  // --- HÀNH ĐỘNG THƯ MỤC ---
+  const handleOpenCreateFolder = (parentId: string | null) => {
+    setCreateFolderParentId(parentId);
+    setRenamingFolder(null);
+    setIsCreateFolderModalOpen(true);
+  };
+
+  const handleOpenRenameFolder = (folder: Folder) => {
+    setRenamingFolder(folder);
+    setIsCreateFolderModalOpen(true);
+  };
+
+  const handleCreateOrRenameFolder = (name: string) => {
+    if (renamingFolder) {
+      // Đổi tên
+      setFolders((prev) =>
+        prev.map((f) => (f.id === renamingFolder.id ? { ...f, name, updatedAt: Date.now() } : f))
+      );
+      showToast(`Đã đổi tên thư mục thành "${name}"`);
+    } else {
+      // Tạo mới
+      const newFolder: Folder = {
+        id: "f_" + Math.random().toString(36).substring(2, 9),
+        name,
+        parentId: createFolderParentId,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      setFolders((prev) => [...prev, newFolder]);
+      showToast(`Đã tạo thư mục "${name}"`);
+    }
+  };
+
+  const handleDeleteFolderConfirm = () => {
+    if (!deleteTarget || deleteTarget.type !== "folder") return;
+    const folderId = deleteTarget.id;
+
+    // Tìm tất cả ID con cháu
+    const getDescendants = (id: string): string[] => {
+      const kids = folders.filter((f) => f.parentId === id);
+      let res = kids.map((k) => k.id);
+      for (const k of kids) {
+        res = res.concat(getDescendants(k.id));
+      }
+      return res;
+    };
+
+    const toDeleteIds = [folderId, ...getDescendants(folderId)];
+
+    setFolders((prev) => prev.filter((f) => !toDeleteIds.includes(f.id)));
+    setDocuments((prev) => prev.filter((d) => !d.folderId || !toDeleteIds.includes(d.folderId)));
+
+    if (currentFolderId && toDeleteIds.includes(currentFolderId)) {
+      setCurrentFolderId(null);
+    }
+
+    showToast(`Đã xóa thư mục "${deleteTarget.name}" và các mục bên trong.`, "info");
+  };
+
+  // --- HÀNH ĐỘNG TÀI LIỆU ---
+  const handleSelectTemplateAndCreate = (template: DocumentTemplate) => {
+    const newDoc: Document = {
+      id: "doc_" + Math.random().toString(36).substring(2, 9),
+      title: template.id === "template-blank" ? "Tài liệu mới chưa đặt tên" : template.name,
+      folderId: currentFolderId,
+      blocks: cloneBlocks(template.blocks), // Deep clone độc lập hoàn toàn với mẫu gốc!
+      tags: [...template.tags],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
+
     setDocuments((prev) => [newDoc, ...prev]);
-    showToast(`Đã tạo tài liệu "${newDoc.title}" thành công!`);
+    setActiveDocumentId(newDoc.id); // Mở ngay trang biên tập riêng
+    showToast(`Đã tạo tài liệu từ mẫu "${template.name}"`);
   };
 
-  // Xóa tài liệu
-  const handleDeleteDocument = (id: string) => {
-    const docToDelete = documents.find((d) => d.id === id);
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
-    showToast(`Đã xóa tài liệu "${docToDelete?.title || ""}"`, "info");
+  const handleSaveDocument = (updatedDoc: Document) => {
+    setDocuments((prev) => prev.map((d) => (d.id === updatedDoc.id ? updatedDoc : d)));
+    showToast(`Đã lưu "${updatedDoc.title}" thành công!`);
   };
 
-  // Nạp dữ liệu mẫu thử nghiệm
-  const handleLoadSampleDocuments = () => {
-    const sampleDocs: DocumentMeta[] = [
-      {
-        id: "sample_1",
-        title: "50 Từ vựng N3 chủ đề Công sở & Giao tiếp IT",
-        description: "Từ vựng thường gặp trong văn phòng Nhật Bản, kanji có furigana và câu ví dụ hội thoại.",
-        category: "vocabulary",
-        level: "N3",
-        tags: ["công sở", "it", "n3"],
-        createdAt: Date.now() - 3600000 * 24 * 2,
-        updatedAt: Date.now() - 3600000 * 4,
-        itemCount: 50,
-      },
-      {
-        id: "sample_2",
-        title: "10 Mẫu ngữ pháp N2 hay xuất hiện trong bài thi đọc hiểu",
-        description: "Phân tích cấu trúc, cách kết hợp, sắc thái biểu đạt và câu ví dụ đối chiếu.",
-        category: "grammar",
-        level: "N2",
-        tags: ["ngữ pháp", "n2", "đọc hiểu"],
-        createdAt: Date.now() - 3600000 * 24 * 5,
-        updatedAt: Date.now() - 3600000 * 12,
-        itemCount: 10,
-      },
-      {
-        id: "sample_3",
-        title: "Bảng 80 chữ Hán N4 thiết yếu kèm bộ thủ & ví dụ",
-        description: "Âm On, âm Kun, nghĩa Hán Việt và các từ ghép thường dùng nhất.",
-        category: "kanji",
-        level: "N4",
-        tags: ["kanji", "n4", "bộ thủ"],
-        createdAt: Date.now() - 3600000 * 24 * 10,
-        updatedAt: Date.now() - 3600000 * 48,
-        itemCount: 80,
-      },
-    ];
-    setDocuments(sampleDocs);
-    showToast("Đã tải 3 tài liệu mẫu tiếng Nhật để kiểm tra giao diện!");
+  const handleDeleteDocumentConfirm = () => {
+    if (!deleteTarget || deleteTarget.type !== "document") return;
+    setDocuments((prev) => prev.filter((d) => d.id !== deleteTarget.id));
+    if (activeDocumentId === deleteTarget.id) {
+      setActiveDocumentId(null);
+    }
+    showToast(`Đã xóa tài liệu "${deleteTarget.name}"`, "info");
   };
 
-  // Xóa toàn bộ dữ liệu để kiểm tra trạng thái rỗng
-  const handleResetToEmpty = () => {
-    setDocuments([]);
-    showToast("Đã đưa thư viện về trạng thái rỗng ban đầu.", "info");
+  // --- HÀNH ĐỘNG DI CHUYỂN ---
+  const handleConfirmMove = (target: MoveTarget, destinationFolderId: string | null) => {
+    if (target.type === "document") {
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === target.id ? { ...d, folderId: destinationFolderId, updatedAt: Date.now() } : d))
+      );
+      showToast(`Đã di chuyển tài liệu "${target.name}"`);
+    } else {
+      setFolders((prev) =>
+        prev.map((f) => (f.id === target.id ? { ...f, parentId: destinationFolderId, updatedAt: Date.now() } : f))
+      );
+      showToast(`Đã di chuyển thư mục "${target.name}"`);
+    }
   };
 
-  // Lọc và tìm kiếm
-  const filteredDocuments = documents.filter((doc) => {
-    const matchesSearch =
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      doc.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+  // --- HÀNH ĐỘNG MẪU TÀI LIỆU ---
+  const handleSaveCustomTemplate = (newTemplate: DocumentTemplate) => {
+    setTemplates((prev) => [newTemplate, ...prev]);
+    showToast(`Đã lưu mẫu "${newTemplate.name}" vào danh sách Mẫu của bạn!`);
+  };
 
-    const matchesCategory = selectedCategory === "all" || doc.category === selectedCategory;
-    const matchesLevel = selectedLevel === "all" || doc.level === selectedLevel;
+  const handleDeleteCustomTemplate = (templateId: string) => {
+    setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+    showToast("Đã xóa mẫu tài liệu tùy chỉnh.", "info");
+  };
 
-    return matchesSearch && matchesCategory && matchesLevel;
-  });
+  // =========================================================================
+  // NẾU ĐANG TRONG CHẾ ĐỘ BIÊN TẬP RIÊNG (DEDICATED FULL-SCREEN EDITOR)
+  // =========================================================================
+  if (activeDocument) {
+    const parentFolder = activeDocument.folderId
+      ? folders.find((f) => f.id === activeDocument.folderId)?.name || "Thư mục"
+      : "Thư mục gốc";
 
-  // Sắp xếp
-  filteredDocuments.sort((a, b) => {
-    if (sortBy === "updatedAt") return b.updatedAt - a.updatedAt;
-    if (sortBy === "createdAt") return b.createdAt - a.createdAt;
-    return a.title.localeCompare(b.title);
-  });
+    return (
+      <EditorPage
+        document={activeDocument}
+        folderName={parentFolder}
+        onBack={() => setActiveDocumentId(null)}
+        onSave={handleSaveDocument}
+        onSaveAsTemplate={handleSaveCustomTemplate}
+      />
+    );
+  }
 
+  // =========================================================================
+  // GIAO DIỆN QUẢN LÝ THƯ MỤC & TÀI LIỆU (FILE EXPLORER STYLE)
+  // =========================================================================
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <Header onNewDocument={() => setIsCreateModalOpen(true)} />
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Banner tiêu đề & Thống kê */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <span>Thư viện tài liệu học tập</span>
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Quản lý các bộ từ vựng, phiếu ngữ pháp, hán tự và bài tập được lưu trên máy của bạn.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {documents.length === 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLoadSampleDocuments}
-                className="text-xs bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
-              >
-                Tải 3 tài liệu mẫu
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleResetToEmpty}
-                className="text-xs text-slate-500"
-              >
-                Thử trạng thái rỗng
-              </Button>
-            )}
-
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsCreateModalOpen(true)}
-              className="gap-1.5 shadow-sm"
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Header chính */}
+      <header className="sticky top-0 z-30 w-full bg-white border-b border-slate-200/90 shadow-2xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tạo tài liệu mới</span>
-            </Button>
-          </div>
-        </div>
+              {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
 
-        {/* Thẻ thống kê */}
-        <StatsOverview documents={documents} />
-
-        {/* Thanh tìm kiếm & bộ lọc */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-4 mb-6 shadow-2xs space-y-3">
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Tìm theo tên tài liệu, mô tả, nhãn tag (#kanji, #n3)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 rounded-lg border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
-              />
-            </div>
-
-            {/* Filter by Category */}
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value as DocumentCategory | "all")}
-                className="h-9.5 px-3 text-xs font-medium rounded-lg bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              >
-                <option value="all">Tất cả loại tài liệu</option>
-                <option value="vocabulary">Sổ từ vựng (単語)</option>
-                <option value="grammar">Ngữ pháp (文法)</option>
-                <option value="kanji">Hán tự (漢字)</option>
-                <option value="exercise">Bài tập (練習)</option>
-                <option value="mixed">Tổng hợp (総合)</option>
-              </select>
-
-              {/* Filter by JLPT Level */}
-              <select
-                value={selectedLevel}
-                onChange={(e) => setSelectedLevel(e.target.value as JLPTLevel | "all")}
-                className="h-9.5 px-3 text-xs font-medium rounded-lg bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              >
-                <option value="all">Tất cả JLPT</option>
-                <option value="N5">N5 (Sơ cấp 1)</option>
-                <option value="N4">N4 (Sơ cấp 2)</option>
-                <option value="N3">N3 (Trung cấp 1)</option>
-                <option value="N2">N2 (Trung cấp 2)</option>
-                <option value="N1">N1 (Cao cấp)</option>
-              </select>
-
-              {/* Sort selector */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as "updatedAt" | "createdAt" | "title")}
-                className="h-9.5 px-3 text-xs font-medium rounded-lg bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              >
-                <option value="updatedAt">Mới sửa gần nhất</option>
-                <option value="createdAt">Mới tạo gần nhất</option>
-                <option value="title">Theo tên A - Z</option>
-              </select>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-rose-500 flex items-center justify-center text-white shadow-xs">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-extrabold text-slate-900 text-sm tracking-tight">
+                  Japanese Study Studio
+                </span>
+                <span className="ml-2 hidden sm:inline-flex px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                  File Explorer
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Nội dung danh sách tài liệu hoặc Trạng thái rỗng */}
-        {documents.length === 0 ? (
-          <EmptyState
-            onCreateNew={() => setIsCreateModalOpen(true)}
-            onUseTemplate={(preset) => {
-              handleCreateDocument({
-                title: preset.title,
-                category: preset.category as DocumentCategory,
-                level: preset.level as JLPTLevel,
-                tags: [preset.category, preset.level.toLowerCase()],
-              });
+          <div className="text-xs text-slate-400 font-medium hidden md:block">
+            Không gian tự do biên tập & tổ chức tài liệu học tập
+          </div>
+        </div>
+      </header>
+
+      {/* Thân giao diện chia 2 cột: Sidebar Cây thư mục + Main View */}
+      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex gap-6">
+        {/* Sidebar: Cây thư mục (Desktop & Drawer Mobile) */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-slate-200 p-4 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:w-64 lg:rounded-2xl lg:border lg:border-slate-200 lg:p-4 lg:shadow-2xs shrink-0 ${
+            isMobileSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+          }`}
+        >
+          <FolderTree
+            folders={folders}
+            documents={documents}
+            currentFolderId={currentFolderId}
+            onSelectFolder={(fId) => {
+              setCurrentFolderId(fId);
+              setSearchQuery("");
+              setIsMobileSidebarOpen(false);
             }}
+            onCreateFolder={(parentId) => handleOpenCreateFolder(parentId)}
           />
-        ) : filteredDocuments.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <Filter className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-            <p className="text-base font-semibold text-slate-700">
-              Không tìm thấy tài liệu nào phù hợp với bộ lọc
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Thử xóa từ khóa tìm kiếm hoặc chọn lại cấp độ JLPT / loại tài liệu.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedCategory("all");
-                setSelectedLevel("all");
-              }}
-            >
-              Đặt lại bộ lọc
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredDocuments.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                document={doc}
-                onEdit={(d) => {
-                  showToast(
-                    `Trình soạn thảo cho "${d.title}" sẽ được kết nối ở Giai đoạn 2 & 3 theo lộ trình.`,
-                    "info"
-                  );
-                }}
-                onPreview={(d) => {
-                  showToast(
-                    `Bản xem trước A4 cho "${d.title}" sẽ được kết nối ở Giai đoạn 5 theo lộ trình.`,
-                    "info"
-                  );
-                }}
-                onDelete={(d) => setDeletingDocument(d)}
-              />
-            ))}
-          </div>
+        </aside>
+
+        {/* Backdrop for mobile sidebar */}
+        {isMobileSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-slate-950/40 z-30 lg:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
         )}
-      </main>
+
+        {/* Vùng chính (Explorer Workspace) */}
+        <main className="flex-1 min-w-0 space-y-4">
+          {/* Breadcrumb Navigation */}
+          <div className="bg-white rounded-xl border border-slate-200/80 px-3 py-2 shadow-2xs">
+            <BreadcrumbNav
+              items={breadcrumbs}
+              onNavigate={(fId) => {
+                setCurrentFolderId(fId);
+                setSearchQuery("");
+              }}
+            />
+          </div>
+
+          {/* Toolbar Explorer */}
+          <ExplorerToolbar
+            currentFolderName={currentFolder ? currentFolder.name : "Thư mục gốc"}
+            isRoot={currentFolderId === null}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onNewDocument={() => setIsTemplateModalOpen(true)}
+            onNewFolder={() => handleOpenCreateFolder(currentFolderId)}
+            onRenameCurrentFolder={currentFolder ? () => handleOpenRenameFolder(currentFolder) : undefined}
+            onDeleteCurrentFolder={
+              currentFolder
+                ? () =>
+                    setDeleteTarget({
+                      type: "folder",
+                      id: currentFolder.id,
+                      name: currentFolder.name,
+                    })
+                : undefined
+            }
+            onMoveCurrentFolder={
+              currentFolder
+                ? () =>
+                    setMoveTarget({
+                      type: "folder",
+                      id: currentFolder.id,
+                      name: currentFolder.name,
+                      currentFolderId: currentFolder.parentId,
+                    })
+                : undefined
+            }
+          />
+
+          {/* Danh sách Thư mục con & Tài liệu */}
+          <FolderView
+            currentFolder={currentFolder}
+            folders={currentSubFolders}
+            documents={currentDocuments}
+            allFolders={folders}
+            viewMode={viewMode}
+            onOpenFolder={(fId) => {
+              setCurrentFolderId(fId);
+              setSearchQuery("");
+            }}
+            onOpenDocument={(doc) => setActiveDocumentId(doc.id)}
+            onRenameFolder={(folder) => handleOpenRenameFolder(folder)}
+            onDeleteFolder={(folder) =>
+              setDeleteTarget({
+                type: "folder",
+                id: folder.id,
+                name: folder.name,
+              })
+            }
+            onMoveItem={(target) => setMoveTarget(target)}
+            onDeleteDocument={(doc) =>
+              setDeleteTarget({
+                type: "document",
+                id: doc.id,
+                name: doc.title,
+              })
+            }
+            onNewDocument={() => setIsTemplateModalOpen(true)}
+          />
+        </main>
+      </div>
 
       {/* Footer */}
-      <footer className="w-full border-t border-slate-200/80 bg-white py-4 text-center text-xs text-slate-500">
+      <footer className="w-full border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-400 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Japanese Study Document Studio — Phiên bản cá nhân (Offline First)</span>
-          <span className="text-[11px] text-slate-400">Giai đoạn 1: Nền tảng giao diện & thư viện tài liệu</span>
+          <span>Japanese Study Document Studio — Phase 1 (Nền tảng Explorer & Block Editor)</span>
+          <span className="text-[11px] text-slate-400">Dữ liệu phiên làm việc hiện tại • Chưa kết nối cơ sở dữ liệu bền vững</span>
         </div>
       </footer>
+
+      {/* --- MODALS --- */}
+
+      {/* Modal Chọn mẫu khi tạo tài liệu mới */}
+      <TemplateModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        templates={templates}
+        onSelectTemplate={handleSelectTemplateAndCreate}
+        onDeleteCustomTemplate={handleDeleteCustomTemplate}
+      />
+
+      {/* Modal Tạo mới / Đổi tên thư mục */}
+      <CreateFolderModal
+        isOpen={isCreateFolderModalOpen}
+        onClose={() => setIsCreateFolderModalOpen(false)}
+        onSubmit={handleCreateOrRenameFolder}
+        initialName={renamingFolder ? renamingFolder.name : ""}
+        isRenaming={Boolean(renamingFolder)}
+        parentFolderName={
+          createFolderParentId
+            ? folders.find((f) => f.id === createFolderParentId)?.name
+            : undefined
+        }
+      />
+
+      {/* Modal Di chuyển tài liệu hoặc thư mục */}
+      <MoveDialog
+        isOpen={Boolean(moveTarget)}
+        onClose={() => setMoveTarget(null)}
+        target={moveTarget}
+        folders={folders}
+        onConfirmMove={handleConfirmMove}
+      />
+
+      {/* Modal Xác nhận xóa an toàn */}
+      <DeleteDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        target={deleteTarget}
+        onConfirm={() => {
+          if (deleteTarget?.type === "folder") {
+            handleDeleteFolderConfirm();
+          } else {
+            handleDeleteDocumentConfirm();
+          }
+        }}
+      />
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -310,21 +437,6 @@ export default function DocumentLibraryPage() {
           <span>{toastMessage.text}</span>
         </div>
       )}
-
-      {/* Modal tạo tài liệu mới */}
-      <CreateDocumentModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCreate={handleCreateDocument}
-      />
-
-      {/* Modal xác nhận xóa tài liệu */}
-      <DeleteConfirmModal
-        isOpen={Boolean(deletingDocument)}
-        onClose={() => setDeletingDocument(null)}
-        document={deletingDocument}
-        onConfirm={handleDeleteDocument}
-      />
     </div>
   );
 }
