@@ -48,8 +48,8 @@ function TreeNode({
         className={cn(
           "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors group",
           isSelected
-            ? "bg-indigo-50 text-indigo-700 font-bold"
-            : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+            ? "bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 font-bold"
+            : "text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100"
         )}
         style={{ paddingLeft: `${Math.max(level * 14, 8)}px` }}
         onClick={() => onSelectFolder(folder.id)}
@@ -62,7 +62,7 @@ function TreeNode({
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
               }}
-              className="p-0.5 text-slate-400 hover:text-slate-700 rounded"
+              className="p-0.5 text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 rounded"
             >
               {isExpanded ? (
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -75,16 +75,16 @@ function TreeNode({
           )}
 
           {isSelected ? (
-            <FolderOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+            <FolderOpen className="w-4 h-4 text-primary-600 dark:text-primary-400 shrink-0" />
           ) : (
-            <FolderIcon className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 shrink-0 transition-colors" />
+            <FolderIcon className="w-4 h-4 text-stone-400 dark:text-stone-500 group-hover:text-primary-500 dark:group-hover:text-primary-400 shrink-0 transition-colors" />
           )}
 
           <span className="truncate">{folder.name}</span>
         </div>
 
         {docCount > 0 && (
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/60 text-slate-600 font-semibold shrink-0">
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200/70 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-semibold shrink-0">
             {docCount}
           </span>
         )}
@@ -121,12 +121,12 @@ export function FolderTree({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between px-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+      <div className="flex items-center justify-between px-2 text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
         <span>Cây thư mục</span>
         <button
           type="button"
           onClick={() => onCreateFolder(currentFolderId)}
-          className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded"
+          className="p-1 text-stone-500 hover:text-primary-600 dark:text-stone-400 dark:hover:text-primary-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded transition-colors"
           title="Tạo thư mục con"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -139,17 +139,17 @@ export function FolderTree({
           className={cn(
             "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors",
             currentFolderId === null
-              ? "bg-indigo-50 text-indigo-700 font-bold"
-              : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900"
+              ? "bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 font-bold"
+              : "text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100"
           )}
           onClick={() => onSelectFolder(null)}
         >
           <div className="flex items-center gap-2">
-            <Home className="w-4 h-4 text-indigo-500" />
+            <Home className="w-4 h-4 text-primary-500 dark:text-primary-400" />
             <span>Thư mục gốc (Root)</span>
           </div>
           {rootDocCount > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/60 text-slate-600 font-semibold">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200/70 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-semibold">
               {rootDocCount}
             </span>
           )}

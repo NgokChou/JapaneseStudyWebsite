@@ -213,6 +213,139 @@ export const BUILTIN_TEMPLATES: DocumentTemplate[] = [
     ],
   },
   {
+    id: "template-grammar-lesson",
+    name: "Chuyên đề Ngữ pháp Tiếng Nhật (JLPT N4-N5)",
+    description: "Mẫu chuẩn biên soạn ngữ pháp: Bảng tổng hợp cấu trúc theo loại từ (có dấu ngoặc gom nhóm), ý nghĩa, lưu ý và ví dụ tương tác.",
+    category: "japanese",
+    tags: ["ngữ pháp", "jlpt", "n4", "n5", "cấu trúc"],
+    blocks: [
+      {
+        id: "g-h1",
+        type: "heading",
+        content: {
+          level: 1,
+          text: "Chuyên đề Ngữ pháp N4: Mẫu câu Phỏng đoán「～でしょう」& Nhượng bộ「～ても」",
+        },
+      },
+      {
+        id: "g-intro",
+        type: "paragraph",
+        content: {
+          text: "Bài học này tổng hợp các mẫu câu quan trọng thường xuất hiện trong giao tiếp hằng ngày và kỳ thi năng lực Nhật ngữ JLPT N4. Hãy chú ý kỹ dạng biến đổi của từng loại từ khi kết hợp.",
+        },
+      },
+      {
+        id: "g-block-1",
+        type: "grammar",
+        content: {
+          pattern: "～でしょう / ～だろう",
+          meaning: "Có lẽ..., chắc là... (Dự đoán, phỏng đoán dựa trên nhận định cá nhân hoặc xác nhận nhẹ nhàng)",
+          structureType: "combination_table",
+          structureFormula: "Thể thông thường (普通形) + でしょう",
+          structureRows: [
+            { id: "r1", wordType: "Động từ (V)", form: "Thể thông thường (辞書形/ない形/た形)", structure: "V [普通形|ふつうけい]", note: "Không dùng だ" },
+            { id: "r2", wordType: "Tính từ đuôi い", form: "Thể thông thường (~い / ~くない / ~かった)", structure: "A-い [普通形|ふつうけい]", note: "Giữ nguyên い" },
+            { id: "r3", wordType: "Tính từ đuôi な", form: "Thể thông thường (Bỏ だ)", structure: "A-な + [語幹|ごかん]", note: "Không thêm だ" },
+            { id: "r4", wordType: "Danh từ (N)", form: "Thể thông thường (Bỏ だ)", structure: "N", note: "Không thêm だ" },
+          ],
+          resultPattern: "でしょう / だろう",
+          explanation: "Dùng để diễn tả sự suy đoán của người nói về một sự việc, hiện tượng nào đó dựa trên thông tin có được hoặc cảm nhận chủ quan. Trong hội thoại thân mật giữa bạn bè, nam giới hay dùng「だろう」.\nKhi lên giọng ở cuối câu (でしょう？), mẫu câu này dùng để hỏi ý kiến hoặc tìm kiếm sự đồng tình từ người nghe.",
+          notes: "• Đối với Tính từ đuôi な và Danh từ ở thì hiện tại khẳng định, bỏ「だ」rồi cộng trực tiếp với「でしょう」. (Ví dụ: [暇|ひま]でしょう, [雨|あめ]でしょう).\n• Tránh nhầm lẫn với [～かもしれません] (chỉ xác suất 50%), [～でしょう] biểu thị mức độ tin tưởng cao hơn (khoảng 70-80%).",
+          examples: [
+            {
+              id: "ex1",
+              japanese: "[明日|あした]は [雨|あめ]が [降|ふ]るでしょう。",
+              reading: "あしたは あめが ふるでしょう。",
+              meaning: "Có lẽ ngày mai trời sẽ mưa.",
+              notes: "Dự báo thời tiết thường dùng mẫu câu này.",
+            },
+            {
+              id: "ex2",
+              japanese: "ミラーさんは [今|いま] [研究室|けんきゅうしつ]に いるでしょう。",
+              reading: "ミラーさんは いま けんきゅうしつに いるでしょう。",
+              meaning: "Anh Miller chắc là bây giờ đang ở trong phòng nghiên cứu.",
+            },
+            {
+              id: "ex3",
+              japanese: "この [料理|りょうり]は とても おいしいでしょう。",
+              reading: "この りょうりは とても おいしいでしょう。",
+              meaning: "Món ăn này chắc là ngon lắm nhỉ.",
+              notes: "Dùng với ngữ điệu xác nhận.",
+            },
+            {
+              id: "ex4",
+              japanese: "あの [人|ひと]は [学生|がくせい]でしょう。",
+              reading: "あの ひとは がくせいでしょう。",
+              meaning: "Người kia có lẽ là học sinh/sinh viên.",
+              notes: "Danh từ kết hợp trực tiếp, không có だ.",
+            },
+          ],
+        },
+      },
+      {
+        id: "g-block-2",
+        type: "grammar",
+        content: {
+          pattern: "～ても / ～でも",
+          meaning: "Dù... cũng..., cho dù... thì vẫn...",
+          structureType: "combination_table",
+          structureFormula: "V-て形 + も / A-くて + も / A-で + も / N-で + も",
+          structureRows: [
+            { id: "r1", wordType: "Động từ (V)", form: "Thể て", structure: "V-て + も", note: "Ví dụ: 飲んでも" },
+            { id: "r2", wordType: "Tính từ đuôi い", form: "Bỏ い thêm くて", structure: "A-くて + も", note: "Ví dụ: 高くても" },
+            { id: "r3", wordType: "Tính từ đuôi な", form: "Bỏ な thêm で", structure: "A-で + も", note: "Ví dụ: 静かでも" },
+            { id: "r4", wordType: "Danh từ (N)", form: "Thêm で", structure: "N-で + も", note: "Ví dụ: 日曜日でも" },
+          ],
+          resultPattern: "も (Cho dù...)",
+          explanation: "Biểu thị điều kiện ngược (nhượng bộ): dù một tiền đề xảy ra thì kết quả phía sau vẫn không thay đổi hoặc diễn ra trái với lẽ thông thường.",
+          notes: "Thường đi kèm phó từ「いくら」,「どんなに」(dù bao nhiêu chăng nữa),「たとえ」(cho dù).",
+          examples: [
+            {
+              id: "ex1",
+              japanese: "[雨|あめ]が [降|ふ]っても、サッカーを します。",
+              reading: "あめが ふっても、サッカーを します。",
+              meaning: "Cho dù trời mưa thì tôi vẫn đá bóng.",
+            },
+            {
+              id: "ex2",
+              japanese: "[高|たか]くても、この [辞書|じしょ]を [買|か]いたいです。",
+              reading: "たかくても、この じしょを かいたいです。",
+              meaning: "Dù đắt thì tôi vẫn muốn mua cuốn từ điển này.",
+            },
+            {
+              id: "ex3",
+              japanese: "いくら [考|かんが]えても、わかりません。",
+              reading: "いくら かんがえても、わかりません。",
+              meaning: "Dù có suy nghĩ bao nhiêu đi nữa thì tôi vẫn không hiểu.",
+            },
+          ],
+        },
+      },
+      {
+        id: "g-h2-summary",
+        type: "heading",
+        content: {
+          level: 2,
+          text: "Bảng so sánh: Mức độ chắc chắn của các dạng phỏng đoán",
+        },
+      },
+      {
+        id: "g-table-compare",
+        type: "table",
+        content: {
+          headers: ["Mẫu câu", "Xác suất ước lượng", "Sắc thái & Ý nghĩa", "Ví dụ"],
+          alignments: ["left", "center", "left", "left"],
+          hasHeader: true,
+          rows: [
+            ["～に違いない", "90% - 99%", "Chắc chắn là... (Tin tưởng tuyệt đối)", "彼が犯人に違いない。"],
+            ["～でしょう", "70% - 80%", "Có lẽ..., chắc là... (Dự đoán khách quan / Xác nhận)", "明日は晴れでしょう。"],
+            ["～かもしれない", "40% - 50%", "Có thể là... (Không chắc chắn, khả năng 50/50)", "バスが遅れるかもしれない。"],
+          ],
+        },
+      },
+    ],
+  },
+  {
     id: "template-blank",
     name: "Tài liệu trống (Blank Document)",
     description: "Bắt đầu với một trang trắng tinh, tự do thêm các khối nội dung theo ý muốn.",

@@ -10,9 +10,7 @@ import {
   Edit2,
   Trash2,
   FolderInput,
-  Folder,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ViewMode } from "@/types/explorer";
 
 interface ExplorerToolbarProps {
@@ -43,40 +41,36 @@ export function ExplorerToolbar({
   onMoveCurrentFolder,
 }: ExplorerToolbarProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-2xs space-y-3">
+    <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-3 shadow-2xs space-y-3 transition-colors duration-200">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Nhóm nút hành động chính */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Nút Tạo tài liệu mới */}
-          <Button
-            size="sm"
-            variant="primary"
+          <button
             onClick={onNewDocument}
-            className="text-xs font-bold gap-1.5 shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary-600 hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600 text-white shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Tạo tài liệu mới</span>
-          </Button>
+          </button>
 
           {/* Nút Tạo thư mục mới */}
-          <Button
-            size="sm"
-            variant="outline"
+          <button
             onClick={onNewFolder}
-            className="text-xs font-medium gap-1.5 bg-slate-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-stone-100 hover:bg-stone-150 dark:bg-stone-800 dark:hover:bg-stone-750 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-750 transition-colors"
           >
-            <FolderPlus className="w-4 h-4 text-indigo-600" />
+            <FolderPlus className="w-4 h-4 text-primary-600 dark:text-primary-400" />
             <span>Thư mục mới</span>
-          </Button>
+          </button>
 
           {/* Thao tác trên thư mục hiện tại (khi không ở Root) */}
           {!isRoot && (
-            <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+            <div className="flex items-center gap-1 border-l border-stone-200 dark:border-stone-750 pl-2">
               {onRenameCurrentFolder && (
                 <button
                   type="button"
                   onClick={onRenameCurrentFolder}
-                  className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors"
+                  className="p-1.5 text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-md transition-colors"
                   title="Đổi tên thư mục này"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
@@ -86,7 +80,7 @@ export function ExplorerToolbar({
                 <button
                   type="button"
                   onClick={onMoveCurrentFolder}
-                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors"
+                  className="p-1.5 text-stone-500 hover:text-primary-600 dark:text-stone-400 dark:hover:text-primary-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-md transition-colors"
                   title="Di chuyển thư mục này sang vị trí khác"
                 >
                   <FolderInput className="w-3.5 h-3.5" />
@@ -96,7 +90,7 @@ export function ExplorerToolbar({
                 <button
                   type="button"
                   onClick={onDeleteCurrentFolder}
-                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                  className="p-1.5 text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-md transition-colors"
                   title="Xóa thư mục này"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -110,25 +104,25 @@ export function ExplorerToolbar({
         <div className="flex items-center gap-2">
           {/* Ô tìm kiếm */}
           <div className="relative flex-1 sm:w-64">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Tìm tài liệu hoặc thư mục..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 rounded-lg border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-stone-50 dark:bg-stone-800 text-stone-900 dark:text-stone-100 rounded-lg border border-stone-200 dark:border-stone-750 focus:bg-white dark:focus:bg-stone-850 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-colors placeholder:text-stone-400 dark:placeholder:text-stone-500"
             />
           </div>
 
           {/* Toggle View Mode */}
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div className="inline-flex rounded-lg border border-stone-200 dark:border-stone-750 bg-stone-100 dark:bg-stone-800 p-0.5">
             <button
               type="button"
               onClick={() => onViewModeChange("grid")}
               className={`p-1.5 rounded-md transition-colors ${
                 viewMode === "grid"
-                  ? "bg-white text-indigo-600 shadow-2xs"
-                  : "text-slate-400 hover:text-slate-700"
+                  ? "bg-white dark:bg-stone-700 text-primary-600 dark:text-primary-300 shadow-2xs font-semibold"
+                  : "text-stone-400 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
               }`}
               title="Xem dạng lưới"
             >
@@ -139,8 +133,8 @@ export function ExplorerToolbar({
               onClick={() => onViewModeChange("list")}
               className={`p-1.5 rounded-md transition-colors ${
                 viewMode === "list"
-                  ? "bg-white text-indigo-600 shadow-2xs"
-                  : "text-slate-400 hover:text-slate-700"
+                  ? "bg-white dark:bg-stone-700 text-primary-600 dark:text-primary-300 shadow-2xs font-semibold"
+                  : "text-stone-400 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
               }`}
               title="Xem dạng danh sách"
             >

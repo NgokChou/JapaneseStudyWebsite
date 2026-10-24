@@ -18,8 +18,10 @@ import {
   Calendar,
   RefreshCw,
   AlertCircle,
+  Eye,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface EditorPageProps {
   document: Document;
@@ -89,6 +91,29 @@ export function EditorPage({
           { id: "dl_1", speaker: "A", japanese: "", reading: "", vietnamese: "" },
           { id: "dl_2", speaker: "B", japanese: "", reading: "", vietnamese: "" },
         ],
+      },
+      grammar: {
+        pattern: "～でしょう",
+        meaning: "Có lẽ..., chắc là...",
+        structureType: "table_grouped",
+        targetPattern: "でしょう",
+        structureRows: [
+          { id: "sr_1", wordType: "Động từ", form: "Thể thông thường", note: "" },
+          { id: "sr_2", wordType: "Tính từ đuôi い", form: "Thể thông thường", note: "" },
+          { id: "sr_3", wordType: "Tính từ đuôi な", form: "Thể thông thường", note: "Bỏ だ" },
+          { id: "sr_4", wordType: "Danh từ", form: "～だ", note: "Bỏ だ" },
+        ],
+        formula: "V / A-い / A-な / N + でしょう",
+        explanation: "Dùng để diễn tả sự suy đoán không chắc chắn của người nói dựa trên một căn cứ nào đó, hoặc hỏi ý kiến người nghe với ngữ điệu lên giọng.",
+        notes: "Khi nói với ngữ điệu lên giọng (でしょう↗), câu mang ý nghĩa xác nhận lại thông tin từ người nghe.",
+        examples: [
+          { id: "ex_1", japanese: "明日は雨が[降|ふ]るでしょう。", reading: "あしたはあめがふるでしょう。", vietnamese: "Ngày mai có lẽ trời sẽ mưa." },
+          { id: "ex_2", japanese: "ミラーさんはもう[帰|かえ]ったでしょう。", reading: "ミラーさんはもうかえったでしょう。", vietnamese: "Anh Miller chắc là đã về rồi nhỉ." },
+        ],
+        showStructure: true,
+        showExplanation: true,
+        showNotes: true,
+        showExamples: true,
       },
     };
 
@@ -187,98 +212,101 @@ export function EditorPage({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-stone-100/70 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+      <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 shadow-xs">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-          {/* Nút quay lại & Thư mục cha */}
+          {/* Nút thoát editor / Xem bài học */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleSafeBack}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              title="Lưu và quay lại chế độ xem bài học"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 bg-stone-150 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-750 rounded-lg transition-colors shadow-2xs"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Quay lại:</span>
-              <span className="text-indigo-600 font-bold truncate max-w-[120px] sm:max-w-none">
-                {folderName}
-              </span>
+              <Eye className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+              <span>Xem bài học</span>
             </button>
+
+            <span className="text-xs text-stone-400 dark:text-stone-600 hidden md:inline">|</span>
+
+            <span className="text-xs text-stone-500 dark:text-stone-400 truncate max-w-[150px] hidden md:inline">
+              Thư mục: <strong className="text-stone-700 dark:text-stone-300">{folderName}</strong>
+            </span>
           </div>
 
           {/* Trạng thái lưu & Các hành động */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Auto-save status badge */}
             <div
-              className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 font-medium"
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-medium border border-stone-200 dark:border-stone-750"
               title={`Lần lưu gần nhất: ${formatDate(lastSavedAt)}`}
             >
               {saveStatus === "saved" && (
                 <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-700 font-medium">Đã lưu vào máy</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-700 dark:text-emerald-400 font-medium hidden sm:inline">Đã lưu vào máy</span>
                 </>
               )}
               {saveStatus === "unsaved" && (
                 <>
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <span className="text-amber-700 font-medium">Đang sửa...</span>
+                  <span className="text-amber-700 dark:text-amber-400 font-medium">Đang sửa...</span>
                 </>
               )}
               {saveStatus === "saving" && (
                 <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
-                  <span className="text-indigo-700 font-medium">Đang tự động lưu...</span>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary-600 dark:text-primary-400" />
+                  <span className="text-primary-700 dark:text-primary-400 font-medium">Đang lưu...</span>
                 </>
               )}
               {saveStatus === "error" && (
                 <>
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                  <span className="text-rose-700 font-medium">Lỗi lưu dữ liệu</span>
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  <span className="text-rose-700 dark:text-rose-400 font-medium">Lỗi lưu</span>
                 </>
               )}
             </div>
 
             {/* Lưu thành mẫu */}
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={() => setIsTemplateModalOpen(true)}
-              className="text-xs gap-1 hidden sm:inline-flex"
+              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-750 bg-white dark:bg-stone-850 px-2.5 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition hidden sm:inline-flex"
               title="Lưu cấu trúc tài liệu này thành mẫu tái sử dụng"
             >
-              <BookmarkPlus className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Lưu thành mẫu</span>
-            </Button>
+              <BookmarkPlus className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
+              <span>Lưu mẫu</span>
+            </button>
 
             {/* Nút lưu thủ công */}
-            <Button
-              variant="primary"
-              size="sm"
+            <button
               onClick={handleManualSave}
               disabled={saveStatus === "saving"}
-              className="text-xs gap-1.5 shadow-sm"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-stone-850 hover:bg-stone-900 dark:bg-stone-750 dark:hover:bg-stone-700 text-white px-3 py-1.5 text-xs font-semibold transition shadow-xs"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{saveStatus === "saving" ? "Đang lưu..." : "Lưu tài liệu"}</span>
-            </Button>
+              <span className="hidden sm:inline">{saveStatus === "saving" ? "Đang lưu..." : "Lưu"}</span>
+            </button>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
-      {/* Editor Main Canvas (Rộng rãi, thoáng đãng kiểu Notion/WordPress) */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-8 py-8 sm:py-12">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-12 min-h-[75vh]">
+      {/* Editor Main Canvas */}
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-10">
+        <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-sm p-6 sm:p-12 min-h-[75vh] transition-colors duration-200">
           {/* Tiêu đề tài liệu có thể chỉnh sửa trực tiếp (Inline Title) */}
-          <div className="mb-8 pb-4 border-b border-slate-100">
+          <div className="mb-8 pb-4 border-b border-stone-150 dark:border-stone-800">
             <input
               type="text"
               value={doc.title}
               onChange={(e) => handleTitleChange(e.target.value)}
               placeholder="Nhập tên tài liệu ở đây..."
-              className="w-full text-2xl sm:text-4xl font-extrabold text-slate-900 bg-transparent border-0 focus:outline-none placeholder:text-slate-300 font-japanese tracking-tight"
+              className="w-full text-2xl sm:text-4xl font-extrabold text-stone-900 dark:text-stone-100 bg-transparent border-0 focus:outline-none placeholder:text-stone-350 dark:placeholder:text-stone-600 font-japanese tracking-tight"
             />
-            <div className="flex items-center gap-4 text-xs text-slate-400 mt-2">
+            <div className="flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400 mt-2">
               <span className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" />
                 Cập nhật: {formatDate(lastSavedAt)}

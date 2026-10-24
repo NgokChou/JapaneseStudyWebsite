@@ -30,6 +30,7 @@ export function BlockWrapper({
   children,
 }: BlockWrapperProps) {
   const typeLabels: Record<BlockType, string> = {
+    grammar: "Ngữ pháp",
     heading: "Tiêu đề",
     paragraph: "Đoạn văn",
     vocab_table: "Bảng từ vựng",
@@ -41,12 +42,12 @@ export function BlockWrapper({
   };
 
   return (
-    <div className="relative group/block rounded-xl transition-all duration-150 p-2 sm:p-3 hover:bg-slate-50/70 border border-transparent hover:border-slate-200/80 my-1">
+    <div className="relative group/block rounded-xl transition-all duration-150 p-2 sm:p-3 hover:bg-slate-50/70 dark:hover:bg-slate-900/60 border border-transparent hover:border-slate-200/80 dark:hover:border-slate-800/80 my-1">
       {/* Thanh công cụ thao tác trên khối (hiển thị khi hover) */}
-      <div className="flex items-center justify-between pb-1 mb-1 border-b border-transparent group-hover/block:border-slate-100 transition-colors">
+      <div className="flex items-center justify-between pb-1 mb-1 border-b border-transparent group-hover/block:border-slate-100 dark:group-hover/block:border-slate-800 transition-colors">
         <div className="flex items-center gap-1.5 opacity-40 group-hover/block:opacity-100 transition-opacity">
           <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab" />
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100/80 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-100/80 dark:bg-slate-800 px-1.5 py-0.5 rounded">
             {typeLabels[block.type] || block.type}
           </span>
         </div>

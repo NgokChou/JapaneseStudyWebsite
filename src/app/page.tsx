@@ -16,7 +16,9 @@ import { MoveDialog } from "@/features/explorer/components/move-dialog";
 import { DeleteDialog } from "@/features/explorer/components/delete-dialog";
 import { TemplateModal } from "@/features/templates/template-modal";
 import { EditorPage } from "@/features/editor/editor-page";
-import { BookOpen, CheckCircle, Info, Menu, X, Database, HardDrive } from "lucide-react";
+import { DocumentViewPage } from "@/features/document-view/document-view-page";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { BookOpen, CheckCircle, Info, Menu, X, HardDrive } from "lucide-react";
 
 export default function HomePage() {
   // --- STATE DỮ LIỆU ---
@@ -28,6 +30,7 @@ export default function HomePage() {
   // --- NAVIGATION STATE ---
   const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(null);
   const [activeDocumentId, setActiveDocumentId] = React.useState<string | null>(null);
+  const [isEditingDocument, setIsEditingDocument] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
@@ -109,7 +112,7 @@ export default function HomePage() {
     return documents.filter((d) => d.folderId === currentFolderId);
   }, [documents, currentFolderId, searchQuery]);
 
-  // Tài liệu đang được mở biên tập
+  // Tài liệu đang được mở biên tập hoặc xem
   const activeDocument = React.useMemo(() => {
     return documents.find((d) => d.id === activeDocumentId) || null;
   }, [activeDocumentId, documents]);
@@ -181,8 +184,9 @@ export default function HomePage() {
 
       const updatedDocs = await documentRepo.getAll();
       setDocuments(updatedDocs);
-      setActiveDocumentId(created.id); // Mở ngay trang biên tập riêng
-      showToast(`Đã tạo và lưu tài liệu "${created.title}" vào IndexedDB!`);
+      setActiveDocumentId(created.id);
+      setIsEditingDocument(true); // Mở editor ngay khi vừa tạo từ template
+      showToast(`Đã tạo bài học "${created.title}" thành công!`);
     } catch (err) {
       showToast("Lỗi khi tạo tài liệu: " + (err instanceof Error ? err.message : ""), "info");
     }
@@ -269,20 +273,40 @@ export default function HomePage() {
   };
 
   // =========================================================================
-  // NẾU ĐANG TRONG CHẾ ĐỘ BIÊN TẬP RIÊNG (DEDICATED FULL-SCREEN EDITOR)
+  // XỬ LÝ CHẾ ĐỘ XEM (VIEW) VÀ BIÊN TẬP (EDIT) TÀI LIỆU
   // =========================================================================
   if (activeDocument) {
     const parentFolder = activeDocument.folderId
       ? folders.find((f) => f.id === activeDocument.folderId)?.name || "Thư mục"
       : "Thư mục gốc";
 
+    // Khi người dùng bấm "Chỉnh sửa" -> Hiển thị EditorPage
+    if (isEditingDocument) {
+      return (
+        <EditorPage
+          document={activeDocument}
+          folderName={parentFolder}
+          onBack={async () => {
+            // Khi thoát Editor -> quay lại DocumentViewPage
+            const refreshed = await documentRepo.getAll();
+            setDocuments(refreshed);
+            setIsEditingDocument(false);
+          }}
+          onSave={handleSaveDocument}
+          onSaveAsTemplate={handleSaveCustomTemplate}
+        />
+      );
+    }
+
+    // MẶC ĐỊNH: Hiển thị DocumentViewPage chỉ đọc
     return (
-      <EditorPage
-        document={activeDocument}
-        folderName={parentFolder}
-        onBack={() => setActiveDocumentId(null)}
-        onSave={handleSaveDocument}
-        onSaveAsTemplate={handleSaveCustomTemplate}
+      <DocumentViewPage
+        documentId={activeDocument.id}
+        onEdit={() => setIsEditingDocument(true)}
+        onBack={() => {
+          setActiveDocumentId(null);
+          setIsEditingDocument(false);
+        }}
       />
     );
   }
@@ -291,41 +315,44 @@ export default function HomePage() {
   // GIAO DIỆN QUẢN LÝ THƯ MỤC & TÀI LIỆU (FILE EXPLORER STYLE)
   // =========================================================================
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-stone-100/70 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
       {/* Header chính */}
-      <header className="sticky top-0 z-30 w-full bg-white border-b border-slate-200/90 shadow-2xs">
+      <header className="sticky top-0 z-30 w-full bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 shadow-2xs transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden"
+              className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800 lg:hidden"
             >
               {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-rose-500 flex items-center justify-center text-white shadow-xs">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary-600 to-rose-500 flex items-center justify-center text-white shadow-xs">
                 <BookOpen className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-extrabold text-slate-900 text-sm tracking-tight">
+                <span className="font-extrabold text-stone-900 dark:text-stone-100 text-sm tracking-tight">
                   Japanese Study Studio
                 </span>
-                <span className="ml-2 hidden sm:inline-flex px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
-                  File Explorer
+                <span className="ml-2 hidden sm:inline-flex px-1.5 py-0.2 rounded text-[10px] font-semibold bg-primary-50 dark:bg-primary-950/60 text-primary-700 dark:text-primary-300 border border-primary-200/60 dark:border-primary-800/50">
+                  Document Studio
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Trạng thái lưu trữ IndexedDB cục bộ */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-[11px] font-medium">
-              <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Lưu cục bộ:</span>
+          {/* Trạng thái lưu trữ IndexedDB cục bộ & Theme Toggle */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300 text-[11px] font-medium">
+              <HardDrive className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">Lưu trữ:</span>
               <span className="font-bold">IndexedDB</span>
             </div>
+
+            {/* Nút chuyển đổi Theme Sáng / Tối */}
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -334,12 +361,12 @@ export default function HomePage() {
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex gap-6">
         {/* Sidebar: Cây thư mục (Desktop & Drawer Mobile) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-slate-200 p-4 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:w-64 lg:rounded-2xl lg:border lg:border-slate-200 lg:p-4 lg:shadow-2xs shrink-0 ${
+          className={`fixed inset-y-0 left-0 z-40 w-72 bg-white dark:bg-stone-900 border-r border-stone-200 dark:border-stone-800 p-4 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:w-64 lg:rounded-2xl lg:border lg:border-stone-200 dark:lg:border-stone-800 lg:p-4 lg:shadow-2xs shrink-0 ${
             isMobileSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
           }`}
         >
           {isLoading ? (
-            <div className="p-4 text-center text-xs text-slate-400">
+            <div className="p-4 text-center text-xs text-stone-400 dark:text-stone-500">
               Đang tải dữ liệu thư mục...
             </div>
           ) : (
@@ -360,7 +387,7 @@ export default function HomePage() {
         {/* Backdrop for mobile sidebar */}
         {isMobileSidebarOpen && (
           <div
-            className="fixed inset-0 bg-slate-950/40 z-30 lg:hidden"
+            className="fixed inset-0 bg-stone-950/40 z-30 lg:hidden"
             onClick={() => setIsMobileSidebarOpen(false)}
           />
         )}
@@ -368,7 +395,7 @@ export default function HomePage() {
         {/* Vùng chính (Explorer Workspace) */}
         <main className="flex-1 min-w-0 space-y-4">
           {/* Breadcrumb Navigation */}
-          <div className="bg-white rounded-xl border border-slate-200/80 px-3 py-2 shadow-2xs">
+          <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 px-3 py-2 shadow-2xs transition-colors">
             <BreadcrumbNav
               items={breadcrumbs}
               onNavigate={(fId) => {
@@ -414,7 +441,7 @@ export default function HomePage() {
 
           {/* Danh sách Thư mục con & Tài liệu */}
           {isLoading ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-xs text-slate-400">
+            <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-12 text-center text-xs text-stone-400 dark:text-stone-500">
               Đang tải danh sách tài liệu từ bộ nhớ máy tính...
             </div>
           ) : (
@@ -428,7 +455,10 @@ export default function HomePage() {
                 setCurrentFolderId(fId);
                 setSearchQuery("");
               }}
-              onOpenDocument={(doc) => setActiveDocumentId(doc.id)}
+              onOpenDocument={(doc) => {
+                setActiveDocumentId(doc.id);
+                setIsEditingDocument(false); // MẶC ĐỊNH MỞ Ở CHẾ ĐỘ VIEW BÀI HỌC
+              }}
               onRenameFolder={(folder) => handleOpenRenameFolder(folder)}
               onDeleteFolder={(folder) =>
                 setDeleteTarget({
@@ -452,10 +482,10 @@ export default function HomePage() {
       </div>
 
       {/* Footer */}
-      <footer className="w-full border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-400 mt-auto">
+      <footer className="w-full border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 py-3.5 text-center text-xs text-stone-400 dark:text-stone-500 mt-auto transition-colors">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Japanese Study Document Studio — Phase 2: Đã kích hoạt lưu trữ IndexedDB</span>
-          <span className="text-[11px] text-slate-400">Dữ liệu lưu trữ bền vững trên máy tính của bạn</span>
+          <span>Japanese Study Document Studio — Quản lý & Biên tập tài liệu tiếng Nhật chuyên nghiệp</span>
+          <span className="text-[11px] text-stone-400 dark:text-stone-600">Dữ liệu lưu trữ bền vững trên máy tính (IndexedDB)</span>
         </div>
       </footer>
 
@@ -509,11 +539,11 @@ export default function HomePage() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-900 text-white shadow-xl text-xs font-medium animate-in slide-in-from-bottom-3 duration-200">
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 shadow-xl text-xs font-medium animate-in slide-in-from-bottom-3 duration-200">
           {toastMessage.type === "success" ? (
-            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle className="w-4 h-4 text-emerald-400 dark:text-emerald-600 shrink-0" />
           ) : (
-            <Info className="w-4 h-4 text-indigo-400 shrink-0" />
+            <Info className="w-4 h-4 text-primary-400 dark:text-primary-600 shrink-0" />
           )}
           <span>{toastMessage.text}</span>
         </div>
