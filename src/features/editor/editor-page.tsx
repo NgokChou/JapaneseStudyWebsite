@@ -9,15 +9,15 @@ import { AddBlockMenu } from "./add-block-menu";
 import { Button } from "@/components/ui/button";
 import { SaveAsTemplateModal } from "@/features/templates/save-as-template-modal";
 import { DocumentTemplate } from "@/types/template";
+import { useAutoSave } from "@/lib/storage/use-auto-save";
 import {
   ArrowLeft,
   Save,
   Check,
   BookmarkPlus,
-  Eye,
-  Edit2,
   Calendar,
-  Sparkles,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -38,14 +38,21 @@ export function EditorPage({
 }: EditorPageProps) {
   const [doc, setDoc] = React.useState<Document>(initialDoc);
   const [isDirty, setIsDirty] = React.useState(false);
-  const [saveStatus, setSaveStatus] = React.useState<"saved" | "unsaved" | "saving">("saved");
   const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
+
+  // Hook tự động lưu vào IndexedDB với debounce 800ms
+  const { status: saveStatus, lastSavedAt, saveNow } = useAutoSave(doc, isDirty, {
+    debounceMs: 800,
+    onSaveSuccess: (saved) => {
+      setIsDirty(false);
+      onSave(saved);
+    },
+  });
 
   // Cập nhật tiêu đề tài liệu
   const handleTitleChange = (newTitle: string) => {
     setDoc((prev) => ({ ...prev, title: newTitle, updatedAt: Date.now() }));
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Cập nhật nội dung một khối
@@ -56,7 +63,6 @@ export function EditorPage({
       updatedAt: Date.now(),
     }));
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Thêm khối mới tại vị trí (cuối hoặc ngay dưới khối chỉ định)
@@ -100,7 +106,6 @@ export function EditorPage({
     });
 
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Di chuyển khối lên
@@ -114,7 +119,6 @@ export function EditorPage({
       return { ...prev, blocks: updated, updatedAt: Date.now() };
     });
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Di chuyển khối xuống
@@ -128,7 +132,6 @@ export function EditorPage({
       return { ...prev, blocks: updated, updatedAt: Date.now() };
     });
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Nhân bản khối
@@ -144,7 +147,6 @@ export function EditorPage({
       return { ...prev, blocks: updated, updatedAt: Date.now() };
     });
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Xóa khối
@@ -154,7 +156,6 @@ export function EditorPage({
       return { ...prev, blocks: updated, updatedAt: Date.now() };
     });
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
   // Chuyển đổi giữa danh sách chấm tròn và danh sách số
@@ -170,17 +171,19 @@ export function EditorPage({
       return { ...prev, blocks: updated, updatedAt: Date.now() };
     });
     setIsDirty(true);
-    setSaveStatus("unsaved");
   };
 
-  // Lưu tài liệu
-  const handleSave = () => {
-    setSaveStatus("saving");
-    setTimeout(() => {
-      onSave(doc);
-      setIsDirty(false);
-      setSaveStatus("saved");
-    }, 250);
+  // Nút quay lại: nếu có thay đổi chưa lưu, lưu trước khi thoát
+  const handleSafeBack = async () => {
+    if (isDirty) {
+      await saveNow();
+    }
+    onBack();
+  };
+
+  // Nút Lưu thủ công: ép lưu ngay lập tức
+  const handleManualSave = async () => {
+    await saveNow();
   };
 
   return (
@@ -192,7 +195,7 @@ export function EditorPage({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onBack}
+              onClick={handleSafeBack}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -205,21 +208,35 @@ export function EditorPage({
 
           {/* Trạng thái lưu & Các hành động */}
           <div className="flex items-center gap-2.5">
-            {/* Save status badge */}
-            <div className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 font-medium">
+            {/* Auto-save status badge */}
+            <div
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 font-medium"
+              title={`Lần lưu gần nhất: ${formatDate(lastSavedAt)}`}
+            >
               {saveStatus === "saved" && (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-700">Đã lưu</span>
+                  <span className="text-emerald-700 font-medium">Đã lưu vào máy</span>
                 </>
               )}
               {saveStatus === "unsaved" && (
                 <>
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <span className="text-amber-700">Chưa lưu thay đổi</span>
+                  <span className="text-amber-700 font-medium">Đang sửa...</span>
                 </>
               )}
-              {saveStatus === "saving" && <span>Đang lưu...</span>}
+              {saveStatus === "saving" && (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                  <span className="text-indigo-700 font-medium">Đang tự động lưu...</span>
+                </>
+              )}
+              {saveStatus === "error" && (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  <span className="text-rose-700 font-medium">Lỗi lưu dữ liệu</span>
+                </>
+              )}
             </div>
 
             {/* Lưu thành mẫu */}
@@ -234,15 +251,16 @@ export function EditorPage({
               <span>Lưu thành mẫu</span>
             </Button>
 
-            {/* Nút lưu chính */}
+            {/* Nút lưu thủ công */}
             <Button
               variant="primary"
               size="sm"
-              onClick={handleSave}
+              onClick={handleManualSave}
+              disabled={saveStatus === "saving"}
               className="text-xs gap-1.5 shadow-sm"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>Lưu tài liệu</span>
+              <span>{saveStatus === "saving" ? "Đang lưu..." : "Lưu tài liệu"}</span>
             </Button>
           </div>
         </div>
@@ -263,7 +281,7 @@ export function EditorPage({
             <div className="flex items-center gap-4 text-xs text-slate-400 mt-2">
               <span className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" />
-                Cập nhật: {formatDate(doc.updatedAt)}
+                Cập nhật: {formatDate(lastSavedAt)}
               </span>
               <span>•</span>
               <span>{doc.blocks.length} khối nội dung</span>

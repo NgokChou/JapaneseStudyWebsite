@@ -3,8 +3,10 @@
 import * as React from "react";
 import { Folder, Document, ViewMode, MoveTarget, BreadcrumbItem } from "@/types/explorer";
 import { DocumentTemplate } from "@/types/template";
-import { INITIAL_FOLDERS, INITIAL_DOCUMENTS, cloneBlocks } from "@/lib/initial-data";
-import { BUILTIN_TEMPLATES } from "@/features/templates/builtin-templates";
+import { db } from "@/lib/storage/db";
+import { folderRepo } from "@/lib/storage/folder-repository";
+import { documentRepo } from "@/lib/storage/document-repository";
+import { templateRepo } from "@/lib/storage/template-repository";
 import { FolderTree } from "@/features/explorer/components/folder-tree";
 import { BreadcrumbNav } from "@/features/explorer/components/breadcrumb-nav";
 import { ExplorerToolbar } from "@/features/explorer/components/explorer-toolbar";
@@ -14,13 +16,14 @@ import { MoveDialog } from "@/features/explorer/components/move-dialog";
 import { DeleteDialog } from "@/features/explorer/components/delete-dialog";
 import { TemplateModal } from "@/features/templates/template-modal";
 import { EditorPage } from "@/features/editor/editor-page";
-import { BookOpen, CheckCircle, Info, Menu, X } from "lucide-react";
+import { BookOpen, CheckCircle, Info, Menu, X, Database, HardDrive } from "lucide-react";
 
 export default function HomePage() {
   // --- STATE DỮ LIỆU ---
-  const [folders, setFolders] = React.useState<Folder[]>(INITIAL_FOLDERS);
-  const [documents, setDocuments] = React.useState<Document[]>(INITIAL_DOCUMENTS);
-  const [templates, setTemplates] = React.useState<DocumentTemplate[]>(BUILTIN_TEMPLATES);
+  const [folders, setFolders] = React.useState<Folder[]>([]);
+  const [documents, setDocuments] = React.useState<Document[]>([]);
+  const [templates, setTemplates] = React.useState<DocumentTemplate[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   // --- NAVIGATION STATE ---
   const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(null);
@@ -46,6 +49,29 @@ export default function HomePage() {
       setToastMessage(null);
     }, 3500);
   };
+
+  // Nạp dữ liệu ban đầu từ IndexedDB khi mở ứng dụng
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        await db.initDefaultData();
+        const [loadedFolders, loadedDocs, loadedTemplates] = await Promise.all([
+          folderRepo.getAll(),
+          documentRepo.getAll(),
+          templateRepo.getAll(),
+        ]);
+        setFolders(loadedFolders);
+        setDocuments(loadedDocs);
+        setTemplates(loadedTemplates);
+      } catch (err) {
+        console.error("Lỗi khởi tạo IndexedDB:", err);
+        showToast("Không thể kết nối cơ sở dữ liệu IndexedDB trên máy", "info");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   // Thư mục hiện tại
   const currentFolder = React.useMemo(() => {
@@ -88,7 +114,7 @@ export default function HomePage() {
     return documents.find((d) => d.id === activeDocumentId) || null;
   }, [activeDocumentId, documents]);
 
-  // --- HÀNH ĐỘNG THƯ MỤC ---
+  // --- HÀNH ĐỘNG THƯ MỤC LƯU VÀO INDEXEDDB ---
   const handleOpenCreateFolder = (parentId: string | null) => {
     setCreateFolderParentId(parentId);
     setRenamingFolder(null);
@@ -100,108 +126,146 @@ export default function HomePage() {
     setIsCreateFolderModalOpen(true);
   };
 
-  const handleCreateOrRenameFolder = (name: string) => {
-    if (renamingFolder) {
-      // Đổi tên
-      setFolders((prev) =>
-        prev.map((f) => (f.id === renamingFolder.id ? { ...f, name, updatedAt: Date.now() } : f))
-      );
-      showToast(`Đã đổi tên thư mục thành "${name}"`);
-    } else {
-      // Tạo mới
-      const newFolder: Folder = {
-        id: "f_" + Math.random().toString(36).substring(2, 9),
-        name,
-        parentId: createFolderParentId,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      setFolders((prev) => [...prev, newFolder]);
-      showToast(`Đã tạo thư mục "${name}"`);
-    }
-  };
-
-  const handleDeleteFolderConfirm = () => {
-    if (!deleteTarget || deleteTarget.type !== "folder") return;
-    const folderId = deleteTarget.id;
-
-    // Tìm tất cả ID con cháu
-    const getDescendants = (id: string): string[] => {
-      const kids = folders.filter((f) => f.parentId === id);
-      let res = kids.map((k) => k.id);
-      for (const k of kids) {
-        res = res.concat(getDescendants(k.id));
+  const handleCreateOrRenameFolder = async (name: string) => {
+    try {
+      if (renamingFolder) {
+        await folderRepo.rename(renamingFolder.id, name);
+        showToast(`Đã đổi tên thư mục thành "${name}"`);
+      } else {
+        await folderRepo.create(name, createFolderParentId);
+        showToast(`Đã tạo thư mục "${name}"`);
       }
-      return res;
-    };
-
-    const toDeleteIds = [folderId, ...getDescendants(folderId)];
-
-    setFolders((prev) => prev.filter((f) => !toDeleteIds.includes(f.id)));
-    setDocuments((prev) => prev.filter((d) => !d.folderId || !toDeleteIds.includes(d.folderId)));
-
-    if (currentFolderId && toDeleteIds.includes(currentFolderId)) {
-      setCurrentFolderId(null);
+      const updatedFolders = await folderRepo.getAll();
+      setFolders(updatedFolders);
+    } catch (err) {
+      showToast("Lỗi khi cập nhật thư mục: " + (err instanceof Error ? err.message : ""), "info");
     }
-
-    showToast(`Đã xóa thư mục "${deleteTarget.name}" và các mục bên trong.`, "info");
   };
 
-  // --- HÀNH ĐỘNG TÀI LIỆU ---
-  const handleSelectTemplateAndCreate = (template: DocumentTemplate) => {
-    const newDoc: Document = {
-      id: "doc_" + Math.random().toString(36).substring(2, 9),
-      title: template.id === "template-blank" ? "Tài liệu mới chưa đặt tên" : template.name,
-      folderId: currentFolderId,
-      blocks: cloneBlocks(template.blocks), // Deep clone độc lập hoàn toàn với mẫu gốc!
-      tags: [...template.tags],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+  const handleDeleteFolderConfirm = async () => {
+    if (!deleteTarget || deleteTarget.type !== "folder") return;
+    try {
+      const folderId = deleteTarget.id;
+      const { deletedFolderIds, deletedDocCount } = await folderRepo.deleteRecursive(folderId);
 
-    setDocuments((prev) => [newDoc, ...prev]);
-    setActiveDocumentId(newDoc.id); // Mở ngay trang biên tập riêng
-    showToast(`Đã tạo tài liệu từ mẫu "${template.name}"`);
+      const [updatedFolders, updatedDocs] = await Promise.all([
+        folderRepo.getAll(),
+        documentRepo.getAll(),
+      ]);
+      setFolders(updatedFolders);
+      setDocuments(updatedDocs);
+
+      if (currentFolderId && deletedFolderIds.includes(currentFolderId)) {
+        setCurrentFolderId(null);
+      }
+
+      showToast(
+        `Đã xóa thư mục "${deleteTarget.name}" (${deletedFolderIds.length} thư mục, ${deletedDocCount} tài liệu)`,
+        "info"
+      );
+    } catch (err) {
+      showToast("Lỗi khi xóa thư mục: " + (err instanceof Error ? err.message : ""), "info");
+    }
   };
 
-  const handleSaveDocument = (updatedDoc: Document) => {
-    setDocuments((prev) => prev.map((d) => (d.id === updatedDoc.id ? updatedDoc : d)));
-    showToast(`Đã lưu "${updatedDoc.title}" thành công!`);
+  // --- HÀNH ĐỘNG TÀI LIỆU LƯU VÀO INDEXEDDB ---
+  const handleSelectTemplateAndCreate = async (template: DocumentTemplate) => {
+    try {
+      const newTitle = template.id === "template-blank" ? "Tài liệu mới chưa đặt tên" : template.name;
+      const created = await documentRepo.create({
+        title: newTitle,
+        folderId: currentFolderId,
+        blocks: template.blocks,
+        tags: [...template.tags],
+      });
+
+      const updatedDocs = await documentRepo.getAll();
+      setDocuments(updatedDocs);
+      setActiveDocumentId(created.id); // Mở ngay trang biên tập riêng
+      showToast(`Đã tạo và lưu tài liệu "${created.title}" vào IndexedDB!`);
+    } catch (err) {
+      showToast("Lỗi khi tạo tài liệu: " + (err instanceof Error ? err.message : ""), "info");
+    }
   };
 
-  const handleDeleteDocumentConfirm = () => {
+  const handleSaveDocument = async (updatedDoc: Document) => {
+    try {
+      await documentRepo.update(updatedDoc.id, {
+        title: updatedDoc.title,
+        folderId: updatedDoc.folderId,
+        blocks: updatedDoc.blocks,
+        tags: updatedDoc.tags,
+        isFavorite: updatedDoc.isFavorite,
+      });
+      const updatedDocs = await documentRepo.getAll();
+      setDocuments(updatedDocs);
+      showToast(`Đã lưu "${updatedDoc.title}" vào máy tính thành công!`);
+    } catch (err) {
+      showToast("Lỗi khi lưu tài liệu: " + (err instanceof Error ? err.message : ""), "info");
+    }
+  };
+
+  const handleDeleteDocumentConfirm = async () => {
     if (!deleteTarget || deleteTarget.type !== "document") return;
-    setDocuments((prev) => prev.filter((d) => d.id !== deleteTarget.id));
-    if (activeDocumentId === deleteTarget.id) {
-      setActiveDocumentId(null);
-    }
-    showToast(`Đã xóa tài liệu "${deleteTarget.name}"`, "info");
-  };
-
-  // --- HÀNH ĐỘNG DI CHUYỂN ---
-  const handleConfirmMove = (target: MoveTarget, destinationFolderId: string | null) => {
-    if (target.type === "document") {
-      setDocuments((prev) =>
-        prev.map((d) => (d.id === target.id ? { ...d, folderId: destinationFolderId, updatedAt: Date.now() } : d))
-      );
-      showToast(`Đã di chuyển tài liệu "${target.name}"`);
-    } else {
-      setFolders((prev) =>
-        prev.map((f) => (f.id === target.id ? { ...f, parentId: destinationFolderId, updatedAt: Date.now() } : f))
-      );
-      showToast(`Đã di chuyển thư mục "${target.name}"`);
+    try {
+      await documentRepo.delete(deleteTarget.id);
+      const updatedDocs = await documentRepo.getAll();
+      setDocuments(updatedDocs);
+      if (activeDocumentId === deleteTarget.id) {
+        setActiveDocumentId(null);
+      }
+      showToast(`Đã xóa tài liệu "${deleteTarget.name}" khỏi IndexedDB`, "info");
+    } catch (err) {
+      showToast("Lỗi khi xóa tài liệu: " + (err instanceof Error ? err.message : ""), "info");
     }
   };
 
-  // --- HÀNH ĐỘNG MẪU TÀI LIỆU ---
-  const handleSaveCustomTemplate = (newTemplate: DocumentTemplate) => {
-    setTemplates((prev) => [newTemplate, ...prev]);
-    showToast(`Đã lưu mẫu "${newTemplate.name}" vào danh sách Mẫu của bạn!`);
+  // --- HÀNH ĐỘNG DI CHUYỂN TRONG INDEXEDDB ---
+  const handleConfirmMove = async (target: MoveTarget, destinationFolderId: string | null) => {
+    try {
+      if (target.type === "document") {
+        await documentRepo.move(target.id, destinationFolderId);
+        const updatedDocs = await documentRepo.getAll();
+        setDocuments(updatedDocs);
+        showToast(`Đã di chuyển tài liệu "${target.name}"`);
+      } else {
+        await folderRepo.move(target.id, destinationFolderId);
+        const updatedFolders = await folderRepo.getAll();
+        setFolders(updatedFolders);
+        showToast(`Đã di chuyển thư mục "${target.name}"`);
+      }
+    } catch (err) {
+      showToast("Không thể di chuyển: " + (err instanceof Error ? err.message : ""), "info");
+    }
   };
 
-  const handleDeleteCustomTemplate = (templateId: string) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== templateId));
-    showToast("Đã xóa mẫu tài liệu tùy chỉnh.", "info");
+  // --- HÀNH ĐỘNG MẪU TÀI LIỆU LƯU VÀO INDEXEDDB ---
+  const handleSaveCustomTemplate = async (newTemplate: DocumentTemplate) => {
+    try {
+      await templateRepo.createCustom({
+        name: newTemplate.name,
+        description: newTemplate.description,
+        category: newTemplate.category,
+        tags: newTemplate.tags,
+        blocks: newTemplate.blocks,
+      });
+      const updatedTemplates = await templateRepo.getAll();
+      setTemplates(updatedTemplates);
+      showToast(`Đã lưu mẫu "${newTemplate.name}" vào danh sách Mẫu của bạn!`);
+    } catch (err) {
+      showToast("Lỗi khi lưu mẫu tài liệu: " + (err instanceof Error ? err.message : ""), "info");
+    }
+  };
+
+  const handleDeleteCustomTemplate = async (templateId: string) => {
+    try {
+      await templateRepo.deleteCustom(templateId);
+      const updatedTemplates = await templateRepo.getAll();
+      setTemplates(updatedTemplates);
+      showToast("Đã xóa mẫu tài liệu tùy chỉnh.", "info");
+    } catch (err) {
+      showToast("Lỗi khi xóa mẫu: " + (err instanceof Error ? err.message : ""), "info");
+    }
   };
 
   // =========================================================================
@@ -255,8 +319,13 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="text-xs text-slate-400 font-medium hidden md:block">
-            Không gian tự do biên tập & tổ chức tài liệu học tập
+          {/* Trạng thái lưu trữ IndexedDB cục bộ */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-[11px] font-medium">
+              <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Lưu cục bộ:</span>
+              <span className="font-bold">IndexedDB</span>
+            </div>
           </div>
         </div>
       </header>
@@ -269,17 +338,23 @@ export default function HomePage() {
             isMobileSidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
           }`}
         >
-          <FolderTree
-            folders={folders}
-            documents={documents}
-            currentFolderId={currentFolderId}
-            onSelectFolder={(fId) => {
-              setCurrentFolderId(fId);
-              setSearchQuery("");
-              setIsMobileSidebarOpen(false);
-            }}
-            onCreateFolder={(parentId) => handleOpenCreateFolder(parentId)}
-          />
+          {isLoading ? (
+            <div className="p-4 text-center text-xs text-slate-400">
+              Đang tải dữ liệu thư mục...
+            </div>
+          ) : (
+            <FolderTree
+              folders={folders}
+              documents={documents}
+              currentFolderId={currentFolderId}
+              onSelectFolder={(fId) => {
+                setCurrentFolderId(fId);
+                setSearchQuery("");
+                setIsMobileSidebarOpen(false);
+              }}
+              onCreateFolder={(parentId) => handleOpenCreateFolder(parentId)}
+            />
+          )}
         </aside>
 
         {/* Backdrop for mobile sidebar */}
@@ -338,43 +413,49 @@ export default function HomePage() {
           />
 
           {/* Danh sách Thư mục con & Tài liệu */}
-          <FolderView
-            currentFolder={currentFolder}
-            folders={currentSubFolders}
-            documents={currentDocuments}
-            allFolders={folders}
-            viewMode={viewMode}
-            onOpenFolder={(fId) => {
-              setCurrentFolderId(fId);
-              setSearchQuery("");
-            }}
-            onOpenDocument={(doc) => setActiveDocumentId(doc.id)}
-            onRenameFolder={(folder) => handleOpenRenameFolder(folder)}
-            onDeleteFolder={(folder) =>
-              setDeleteTarget({
-                type: "folder",
-                id: folder.id,
-                name: folder.name,
-              })
-            }
-            onMoveItem={(target) => setMoveTarget(target)}
-            onDeleteDocument={(doc) =>
-              setDeleteTarget({
-                type: "document",
-                id: doc.id,
-                name: doc.title,
-              })
-            }
-            onNewDocument={() => setIsTemplateModalOpen(true)}
-          />
+          {isLoading ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-xs text-slate-400">
+              Đang tải danh sách tài liệu từ bộ nhớ máy tính...
+            </div>
+          ) : (
+            <FolderView
+              currentFolder={currentFolder}
+              folders={currentSubFolders}
+              documents={currentDocuments}
+              allFolders={folders}
+              viewMode={viewMode}
+              onOpenFolder={(fId) => {
+                setCurrentFolderId(fId);
+                setSearchQuery("");
+              }}
+              onOpenDocument={(doc) => setActiveDocumentId(doc.id)}
+              onRenameFolder={(folder) => handleOpenRenameFolder(folder)}
+              onDeleteFolder={(folder) =>
+                setDeleteTarget({
+                  type: "folder",
+                  id: folder.id,
+                  name: folder.name,
+                })
+              }
+              onMoveItem={(target) => setMoveTarget(target)}
+              onDeleteDocument={(doc) =>
+                setDeleteTarget({
+                  type: "document",
+                  id: doc.id,
+                  name: doc.title,
+                })
+              }
+              onNewDocument={() => setIsTemplateModalOpen(true)}
+            />
+          )}
         </main>
       </div>
 
       {/* Footer */}
       <footer className="w-full border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-400 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Japanese Study Document Studio — Phase 1 (Nền tảng Explorer & Block Editor)</span>
-          <span className="text-[11px] text-slate-400">Dữ liệu phiên làm việc hiện tại • Chưa kết nối cơ sở dữ liệu bền vững</span>
+          <span>Japanese Study Document Studio — Phase 2: Đã kích hoạt lưu trữ IndexedDB</span>
+          <span className="text-[11px] text-slate-400">Dữ liệu lưu trữ bền vững trên máy tính của bạn</span>
         </div>
       </footer>
 
